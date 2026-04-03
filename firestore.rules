@@ -1,0 +1,82 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAllowedAdmin() {
+      return isSignedIn() &&
+        request.auth.token.email != null &&
+        request.auth.token.email in [
+          "engineerhaile@gmail.com"
+        ];
+    }
+
+    function isValidUrl(value) {
+      return value is string &&
+        (value.size() == 0 || value.matches('^https?://.+'));
+    }
+
+    function isValidProject() {
+      return request.resource.data.keys().hasOnly([
+          "id",
+          "title",
+          "description",
+          "stack",
+          "githubUrl",
+          "demoUrl",
+          "image",
+          "featured",
+          "published",
+          "createdAt",
+          "updatedAt"
+        ]) &&
+        request.resource.data.id is string &&
+        request.resource.data.id.size() > 0 &&
+        request.resource.data.title is string &&
+        request.resource.data.title.size() >= 3 &&
+        request.resource.data.title.size() <= 120 &&
+        request.resource.data.description is string &&
+        request.resource.data.description.size() >= 10 &&
+        request.resource.data.description.size() <= 1000 &&
+        request.resource.data.stack is list &&
+        request.resource.data.stack.size() <= 12 &&
+        request.resource.data.image is string &&
+        request.resource.data.image.size() > 0 &&
+        request.resource.data.featured is bool &&
+        request.resource.data.published is bool &&
+        request.resource.data.createdAt is string &&
+        request.resource.data.updatedAt is string &&
+        isValidUrl(request.resource.data.githubUrl) &&
+        isValidUrl(request.resource.data.demoUrl);
+    }
+
+    function isValidMessage() {
+      return request.resource.data.keys().hasOnly([
+          "name",
+          "email",
+          "message",
+          "createdAt"
+        ]) &&
+        request.resource.data.name is string &&
+        request.resource.data.name.size() >= 2 &&
+        request.resource.data.name.size() <= 80 &&
+        request.resource.data.email is string &&
+        request.resource.data.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$') &&
+        request.resource.data.message is string &&
+        request.resource.data.message.size() >= 10 &&
+        request.resource.data.message.size() <= 1000;
+    }
+
+    match /messages/{messageId} {
+      allow create: if isValidMessage();
+      allow read, update, delete: if isAllowedAdmin();
+    }
+
+    match /projects/{projectId} {
+      allow read: if resource.data.published == true || isAllowedAdmin();
+      allow create, update, delete: if isAllowedAdmin() && isValidProject();
+    }
+  }
+}
